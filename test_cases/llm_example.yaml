@@ -1,0 +1,47 @@
+name: "LLM Quality Test Suite"
+description: "Test suite for evaluating LLM responses"
+
+# Run with: python run_eval.py --test-suite test_cases/llm_example.yaml --connector openai --model gpt-4
+
+test_cases:
+  - name: "Code generation test"
+    input: "Write a Python function to calculate fibonacci numbers"
+    evaluators:
+      - type: "contains"
+        value: "def"
+      - type: "contains"
+        value: "fibonacci"
+      - type: "regex"
+        pattern: "def\\s+\\w+\\s*\\("
+  
+  - name: "JSON output test"
+    input: "Generate a JSON object with fields: name, age, city"
+    evaluators:
+      - type: "json_schema"
+        schema:
+          required: ["name", "age", "city"]
+  
+  - name: "Semantic similarity test"
+    input: "What is the capital of France?"
+    expected_output: "The capital of France is Paris."
+    evaluators:
+      - type: "semantic_similarity"
+        threshold: 0.7
+  
+  - name: "Conciseness test"
+    input: "In one sentence, what is Python?"
+    evaluators:
+      - type: "contains"
+        value: "Python"
+      - type: "length"
+        max_length: 200
+  
+  - name: "Math reasoning test"
+    input: "If a train travels 60 miles per hour for 2.5 hours, how far does it travel?"
+    evaluators:
+      - type: "contains"
+        value: "150"
+      - type: "semantic_similarity"
+        threshold: 0.6
+    expected_output: "The train travels 150 miles."
+

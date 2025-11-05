@@ -1,0 +1,34 @@
+[
+  {
+    "id": "example-review-001",
+    "timestamp": "2024-11-05T10:30:00",
+    "prompt": "What is the total budget allocation for the Public Works department in Q1 2024?",
+    "context": "Department: Public Works, Quarter: Q1 2024, Previous budget: $2.5M, Current budget: $2.8M",
+    "response": "Based on the data provided, the Public Works department has been allocated a total budget of $2.8 million for Q1 2024. This represents an increase of $300,000 (12%) compared to the previous quarter.",
+    "expected_output": null,
+    "feature": "budget_query",
+    "model": "gpt-4",
+    "user_id": "demo_user",
+    "metadata": {
+      "department": "Public Works",
+      "quarter": "Q1_2024"
+    }
+  },
+  {
+    "id": "example-review-002",
+    "timestamp": "2024-11-05T10:35:00",
+    "prompt": "Generate a variance report for IT department spending in October.",
+    "context": "Budget: $500,000, Actual: $547,000, Variance: +$47,000 (+9.4%)",
+    "response": "The IT department exceeded its October budget by $47,000, representing a 9.4% overage. Main contributors were: Hardware upgrades ($25k), Software licenses ($15k), Contractor services ($7k). The overage is within acceptable limits and was due to accelerated cloud migration timeline.",
+    "expected_output": null,
+    "feature": "variance_report",
+    "model": "gpt-4",
+    "user_id": "demo_user",
+    "metadata": {
+      "department": "IT",
+      "month": "October",
+      "variance_percent": 9.4
+    }
+  }
+]
+

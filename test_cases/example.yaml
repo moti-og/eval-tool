@@ -1,0 +1,44 @@
+name: "Example Test Suite"
+description: "Example test cases demonstrating different evaluation types"
+
+# Note: This example uses the 'mock' connector by default
+# To use with real systems, specify --connector openai/anthropic/custom_app
+
+test_cases:
+  - name: "Simple exact match test"
+    input: "What is 2+2?"
+    expected_output: "Mock response: What is 2+2?"
+    evaluators:
+      - type: "exact_match"
+  
+  - name: "Contains keyword test"
+    input: "Tell me about Python"
+    evaluators:
+      - type: "contains"
+        value: "Python"
+      - type: "contains"
+        value: "Mock response"
+  
+  - name: "Length constraint test"
+    input: "Write a short sentence"
+    evaluators:
+      - type: "length"
+        min_length: 10
+        max_length: 100
+  
+  - name: "Regex pattern test"
+    input: "What is your name?"
+    evaluators:
+      - type: "regex"
+        pattern: "Mock.*name"
+  
+  - name: "Multiple evaluators test"
+    input: "Explain machine learning"
+    expected_output: "Mock response: Explain machine learning"
+    evaluators:
+      - type: "contains"
+        value: "machine learning"
+      - type: "length"
+        min_length: 20
+      - type: "exact_match"
+

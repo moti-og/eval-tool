@@ -1,0 +1,44 @@
+name: "Custom Application Test Suite"
+description: "Test suite for your custom application"
+
+# Run with: python run_eval.py --test-suite test_cases/custom_app_example.yaml --connector custom_app --api-url http://your-app.com
+
+test_cases:
+  - name: "API health check"
+    input: "ping"
+    evaluators:
+      - type: "contains"
+        value: "pong"
+    metadata:
+      category: "health"
+  
+  - name: "Data processing test"
+    input: |
+      {
+        "data": [1, 2, 3, 4, 5]
+      }
+    evaluators:
+      - type: "json_schema"
+      - type: "contains"
+        value: "result"
+    metadata:
+      category: "data_processing"
+  
+  - name: "Error handling test"
+    input: "invalid_command_xyz"
+    evaluators:
+      - type: "contains"
+        value: "error"
+    metadata:
+      category: "error_handling"
+      expected_to_fail: true
+  
+  - name: "Performance test"
+    input: "large_dataset_query"
+    evaluators:
+      - type: "length"
+        min_length: 1
+    metadata:
+      category: "performance"
+      max_expected_time: 5.0
+
