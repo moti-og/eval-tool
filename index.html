@@ -229,6 +229,26 @@
             background: #1a5bd8;
         }
         
+        .reset-btn {
+            background: #da3633;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .reset-btn:hover {
+            background: #c92a2a;
+        }
+        
+        .reset-btn:disabled {
+            background: #4a4a4a;
+            cursor: not-allowed;
+        }
+        
         .info-modal {
             display: none;
             position: fixed;
@@ -340,6 +360,7 @@
             <h1 id="title">Loading...</h1>
             <div class="header-right">
                 <button class="info-btn" onclick="showInfo()">ℹ️ What is this?</button>
+                <button id="resetBtn" class="reset-btn" onclick="regenerateData()">🔄 Regenerate Data Set</button>
                 <a href="/results.html" class="results-link">📊 View Results</a>
                 <span class="reviewer-label">Reviewer</span>
                 <input type="text" id="reviewer" class="reviewer-input" placeholder="Your name..." value="">
@@ -598,6 +619,49 @@
         function closeInfo(event) {
             if (!event || event.target.id === 'infoModal') {
                 document.getElementById('infoModal').classList.remove('visible');
+            }
+        }
+        
+        // Regenerate data set
+        async function regenerateData() {
+            if (!confirm('Regenerate data set? This will restore all reviews to the pending queue.\n\nAny completed reviews will remain in the results.')) {
+                return;
+            }
+
+            const btn = document.getElementById('resetBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Regenerating...';
+
+            try {
+                const response = await fetch('/api/reset-reviews', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Clear all submitted review tracking when resetting
+                    Object.keys(localStorage).forEach(key => {
+                        if (key.startsWith('submitted_')) {
+                            localStorage.removeItem(key);
+                        }
+                    });
+                    
+                    alert(`✅ Success!\n\nRegenerated ${result.count} reviews to pending queue.\n\nAll submission tracking has been cleared.`);
+                    window.location.reload();
+                } else {
+                    alert('❌ Error: ' + (result.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.textContent = '🔄 Regenerate Data Set';
+                }
+
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = '🔄 Regenerate Data Set';
             }
         }
         
