@@ -32,10 +32,11 @@ module.exports = async (req, res) => {
     const db = await connectToDatabase();
     const collection = db.collection('completed_reviews');
     
-    // Only get fields we need (exclude large response field)
+    // Only get fields we need (MongoDB doesn't allow mixing inclusion and exclusion)
     const reviews = await collection
       .find({}, {
         projection: {
+          _id: 1,
           review_id: 1,
           prompt: 1,
           acceptable: 1,
@@ -44,8 +45,9 @@ module.exports = async (req, res) => {
           timestamp: 1,
           submitted_at: 1,
           organization_name: 1,
-          // Exclude large HTML response field
-          response: 0
+          agency_user: 1,
+          user_id: 1
+          // Note: response field excluded by not including it
         }
       })
       .sort({ submitted_at: -1 })
