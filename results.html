@@ -275,7 +275,7 @@
     <div class="header">
         <h1>📊 Review Results</h1>
         <div style="display: flex; gap: 12px; align-items: center;">
-            <button id="resetBtn" class="reset-btn">🔄 Reset All Reviews</button>
+            <button id="resetBtn" class="reset-btn">🔄 Regenerate Data Set</button>
             <a href="/" class="nav-link">← Back to Reviews</a>
         </div>
     </div>
@@ -526,13 +526,13 @@
 
         // Reset reviews handler
         document.getElementById('resetBtn').addEventListener('click', async () => {
-            if (!confirm('Reset all reviews? This will restore all 9 items to the pending queue.\n\nAny completed reviews will remain in the results.')) {
+            if (!confirm('Regenerate data set? This will restore all reviews to the pending queue.\n\nAny completed reviews will remain in the results.')) {
                 return;
             }
 
             const btn = document.getElementById('resetBtn');
             btn.disabled = true;
-            btn.textContent = '⏳ Resetting...';
+            btn.textContent = '⏳ Regenerating...';
 
             try {
                 const response = await fetch('/api/reset-reviews', {
@@ -552,18 +552,18 @@
                         }
                     });
                     
-                    alert(`✅ Success!\n\nReset ${result.count} reviews to pending queue.\n\nAll submission tracking has been cleared.`);
+                    alert(`✅ Success!\n\nRegenerated ${result.count} reviews to pending queue.\n\nAll submission tracking has been cleared.`);
                     window.location.href = '/';
                 } else {
                     alert('❌ Error: ' + (result.error || 'Unknown error'));
                     btn.disabled = false;
-                    btn.textContent = '🔄 Reset All Reviews';
+                    btn.textContent = '🔄 Regenerate Data Set';
                 }
 
             } catch (error) {
                 alert('❌ Error: ' + error.message);
                 btn.disabled = false;
-                btn.textContent = '🔄 Reset All Reviews';
+                btn.textContent = '🔄 Regenerate Data Set';
             }
         });
 
