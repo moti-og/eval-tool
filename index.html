@@ -267,9 +267,10 @@
     </div>
     
     <script>
+        let allReviews = [];
+        let currentIndex = 0;
         let currentReview = null;
         let selectedScore = null;
-        let totalRemaining = 0;
         
         // Load reviewer name from localStorage
         const savedReviewer = localStorage.getItem('reviewer_name');
@@ -282,19 +283,24 @@
             localStorage.setItem('reviewer_name', e.target.value);
         });
         
-        async function loadReview() {
+        async function loadAllReviews() {
             try {
-                const response = await fetch('/api/get-reviews');
+                document.getElementById('title').textContent = 'Loading reviews...';
+                
+                const response = await fetch('/api/get-all-reviews');
                 const data = await response.json();
                 
-                if (data.error) {
+                if (data.error || !data.reviews || data.reviews.length === 0) {
                     showNoReviews();
                     return;
                 }
                 
-                currentReview = data.review;
-                totalRemaining = data.remaining;
-                showReview(currentReview);
+                // Store all reviews in memory
+                allReviews = data.reviews;
+                currentIndex = 0;
+                
+                // Show first review
+                showReview(allReviews[currentIndex]);
                 
             } catch (error) {
                 showError('Error loading reviews: ' + error.message);
@@ -305,7 +311,8 @@
             currentReview = review;
             selectedScore = null;
             
-            document.getElementById('title').textContent = `Human review - ${totalRemaining} remaining`;
+            const remaining = allReviews.length - currentIndex;
+            document.getElementById('title').textContent = `Human review - ${remaining} remaining`;
             
             const contextHtml = review.context ? `
                 <div class="label">Context</div>
@@ -388,26 +395,24 @@
                 organization_name: currentReview.organization_name
             };
             
-            try {
-                const response = await fetch('/api/submit-review', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(reviewData)
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    // Load next review
-                    await loadReview();
-                } else {
-                    showError('Error: ' + (result.error || 'Unknown error'));
-                }
-                
-            } catch (error) {
-                showError('Error submitting review: ' + error.message);
+            // Submit in background (don't wait)
+            fetch('/api/submit-review', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(reviewData)
+            }).catch(err => console.error('Error submitting review:', err));
+            
+            // Immediately move to next review from memory
+            currentIndex++;
+            
+            if (currentIndex < allReviews.length) {
+                // Show next review instantly from memory
+                showReview(allReviews[currentIndex]);
+            } else {
+                // All done!
+                showSuccess();
             }
         }
         
@@ -437,8 +442,8 @@
             `;
         }
         
-        // Load review on page load
-        loadReview();
+        // Load all reviews once on page load
+        loadAllReviews();
     </script>
 </body>
 </html>
