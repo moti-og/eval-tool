@@ -461,10 +461,21 @@
                             <p><strong>Reviewer:</strong> ${review.reviewer || 'Anonymous'}</p>
                             <p><strong>Status:</strong> <span class="status-badge ${statusClass}">${statusText}</span></p>
                             <p><strong>Timestamp:</strong> ${formattedTime}</p>
+                            ${review.agency_user ? `<p><strong>Agency User:</strong> ${review.agency_user}</p>` : ''}
                             ${review.notes ? `<p><strong>Notes:</strong> ${review.notes}</p>` : ''}
                         </div>
                     </div>
                 `;
+                
+                // Show AI-generated response content
+                if (firstReview.response) {
+                    html += `
+                        <div class="content-detail">
+                            <h4>AI Generated Response</h4>
+                            <div class="content-text">${firstReview.response}</div>
+                        </div>
+                    `;
+                }
             } else {
                 // Multiple reviews - show nested
                 html += `
@@ -505,6 +516,16 @@
                         </div>
                     </div>
                 `;
+                
+                // Show AI-generated response content for multiple reviews too
+                if (firstReview.response) {
+                    html += `
+                        <div class="content-detail">
+                            <h4>AI Generated Response</h4>
+                            <div class="content-text">${firstReview.response}</div>
+                        </div>
+                    `;
+                }
             }
 
             return html;
