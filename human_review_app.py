@@ -57,208 +57,235 @@ def mark_as_reviewed(review_id: str):
 
 def main():
     st.set_page_config(
-        page_title="LLM Response Review",
+        page_title="Human Review",
         page_icon="📝",
-        layout="wide"
+        layout="wide",
+        initial_sidebar_state="collapsed"
     )
     
-    st.title("🔍 LLM Response Human Review")
-    st.markdown("---")
+    # Custom CSS for dark theme
+    st.markdown("""
+        <style>
+        /* Dark theme */
+        .stApp {
+            background-color: #0e1117;
+        }
+        
+        /* Hide default Streamlit elements */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        
+        /* Custom styling */
+        .main-title {
+            font-size: 18px;
+            color: #cccccc;
+            margin-bottom: 20px;
+        }
+        
+        .conversation-box {
+            background-color: #1a1d24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 3px solid #333;
+        }
+        
+        .user-msg {
+            color: #e0e0e0;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .assistant-msg {
+            color: #b0b0b0;
+            font-size: 14px;
+            background-color: #0e1117;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 8px;
+        }
+        
+        .label-text {
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 8px;
+            margin-top: 15px;
+            font-weight: 500;
+        }
+        
+        /* Sidebar styling */
+        .css-1d391kg {
+            background-color: #1a1d24;
+        }
+        
+        div[data-testid="stSidebar"] {
+            background-color: #1a1d24;
+        }
+        
+        /* Button styling */
+        .stButton>button {
+            background-color: #2d3139;
+            color: white;
+            border: none;
+            border-radius: 6px;
+        }
+        
+        .stButton>button:hover {
+            background-color: #3d4149;
+        }
+        </style>
+    """, unsafe_allow_html=True)
     
-    # Sidebar for navigation
-    with st.sidebar:
-        st.header("Navigation")
-        page = st.radio(
-            "Select Page",
-            ["Review Responses", "View History", "Analytics"]
-        )
-        
-        st.markdown("---")
-        st.subheader("Stats")
-        
-        # Show stats
-        all_reviews = storage.get_all_reviews()
-        st.metric("Total Reviews", len(all_reviews))
-        
-        if all_reviews:
-            avg_rating = sum(r.get('rating', 0) for r in all_reviews) / len(all_reviews)
-            st.metric("Avg Rating", f"{avg_rating:.2f}")
-    
-    # Main content area
-    if page == "Review Responses":
-        show_review_page()
-    elif page == "View History":
-        show_history_page()
-    elif page == "Analytics":
-        show_analytics_page()
+    # Simple navigation
+    show_review_page()
 
 
 def show_review_page():
     """Main review interface"""
-    st.header("Review LLM Responses")
     
     # Load pending reviews
     pending = load_pending_reviews()
     
     if not pending:
-        st.info("🎉 No pending reviews! All caught up.")
-        
-        # Option to view previous reviews
-        if st.button("View Review History"):
-            st.session_state.page = "View History"
-            st.rerun()
+        st.markdown('<p class="main-title">No pending reviews</p>', unsafe_allow_html=True)
         return
-    
-    # Show progress
-    st.progress(0 if not pending else (1 / len(pending)))
-    st.caption(f"📊 {len(pending)} responses pending review")
     
     # Get current review
     current_review = pending[0]
     review_id = current_review.get('id', '')
     
-    # Layout: Response on left, Review form on right
-    col1, col2 = st.columns([2, 1])
+    # Top bar
+    col_title, col_nav = st.columns([3, 1])
+    with col_title:
+        st.markdown(f'<p class="main-title">Human review - {len(pending)} of {len(pending)} remaining</p>', unsafe_allow_html=True)
+    with col_nav:
+        st.markdown(f'<p style="text-align: right; color: #666; font-size: 12px;">Item {1} of {len(pending)}</p>', unsafe_allow_html=True)
+    
+    # Layout: Conversation on left, Review form on right
+    col1, col2 = st.columns([2.5, 1])
     
     with col1:
-        st.subheader("📄 LLM Response Details")
+        # Conversation display        
+        # Display prompt/user message
+        st.markdown('<p class="label-text">User</p>', unsafe_allow_html=True)
+        st.markdown('<div class="conversation-box">', unsafe_allow_html=True)
+        st.markdown(f'<p class="user-msg">{current_review.get("prompt", "")}</p>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
         
-        # Show metadata
-        with st.expander("ℹ️ Metadata", expanded=False):
-            st.json({
-                "ID": current_review.get('id', 'N/A'),
-                "Timestamp": current_review.get('timestamp', 'N/A'),
-                "Model": current_review.get('model', 'N/A'),
-                "Feature": current_review.get('feature', 'N/A'),
-                "User ID": current_review.get('user_id', 'N/A'),
-            })
-        
-        # Display prompt
-        st.markdown("### 💬 Prompt")
-        st.info(current_review.get('prompt', 'No prompt provided'))
-        
-        # Display context
+        # Display context if exists
         if current_review.get('context'):
-            st.markdown("### 📚 Context")
-            with st.expander("View Context", expanded=False):
-                st.text(current_review.get('context', ''))
+            st.markdown('<p class="label-text">Context</p>', unsafe_allow_html=True)
+            st.markdown('<div class="conversation-box">', unsafe_allow_html=True)
+            st.markdown(f'<p class="user-msg" style="font-size: 12px; color: #888;">{current_review.get("context", "")}</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         
-        # Display response (main focus)
-        st.markdown("### 🤖 LLM Response")
-        response_text = current_review.get('response', 'No response')
-        st.markdown(f"""
-        <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; border-left: 4px solid #4CAF50;">
-            {response_text}
-        </div>
-        """, unsafe_allow_html=True)
+        # Display assistant response
+        st.markdown('<p class="label-text">Assistant</p>', unsafe_allow_html=True)
+        st.markdown('<div class="conversation-box">', unsafe_allow_html=True)
+        st.markdown(f'<div class="assistant-msg">{current_review.get("response", "")}</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
         
-        # Display expected output if available
+        # Expected output if available
         if current_review.get('expected_output'):
-            st.markdown("### ✅ Expected Output")
-            st.success(current_review.get('expected_output'))
+            st.markdown('<div class="conversation-box">', unsafe_allow_html=True)
+            st.markdown('<p class="label-text">Expected</p>', unsafe_allow_html=True)
+            st.markdown(f'<p class="user-msg" style="color: #4CAF50;">{current_review.get("expected_output", "")}</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
-        st.subheader("📝 Your Review")
+        st.markdown("### Scores")
         
-        # Rating
-        rating = st.select_slider(
-            "Overall Rating",
-            options=[1, 2, 3, 4, 5],
-            value=3,
-            help="1 = Poor, 5 = Excellent"
-        )
+        # Simple acceptable/not acceptable buttons
+        col_acc, col_not = st.columns(2)
+        with col_acc:
+            acceptable = st.button("✓ Acceptable", use_container_width=True, key="btn_acceptable")
+        with col_not:
+            not_acceptable = st.button("✗ Not Acceptable", use_container_width=True, key="btn_not_acceptable")
         
-        # Quick evaluation categories
-        st.markdown("#### Evaluation Criteria")
+        # Store the choice
+        if 'score_choice' not in st.session_state:
+            st.session_state.score_choice = None
         
-        accuracy = st.checkbox("✓ Accurate", value=True)
-        relevant = st.checkbox("✓ Relevant", value=True)
-        complete = st.checkbox("✓ Complete", value=True)
-        well_formatted = st.checkbox("✓ Well Formatted", value=True)
+        if acceptable:
+            st.session_state.score_choice = "acceptable"
+        elif not_acceptable:
+            st.session_state.score_choice = "not_acceptable"
         
-        # Issues checkboxes
-        st.markdown("#### Issues (if any)")
+        if st.session_state.score_choice:
+            choice_display = "✓ Acceptable" if st.session_state.score_choice == "acceptable" else "✗ Not Acceptable"
+            st.info(f"Selected: {choice_display}")
         
-        hallucination = st.checkbox("⚠️ Hallucination/Incorrect Info")
-        off_topic = st.checkbox("⚠️ Off Topic")
-        incomplete = st.checkbox("⚠️ Incomplete")
-        formatting_issue = st.checkbox("⚠️ Formatting Issue")
-        other_issue = st.checkbox("⚠️ Other Issue")
+        st.markdown("---")
+        st.markdown("### Notes")
         
         # Free-form notes
         notes = st.text_area(
-            "Additional Notes",
-            placeholder="Add any comments, suggestions, or observations...",
-            height=150
+            "Notes",
+            placeholder="Add your feedback here...",
+            height=200,
+            label_visibility="collapsed"
         )
         
         # Tags
         tags = st.multiselect(
             "Tags",
-            ["excellent", "good", "needs-improvement", "error", "edge-case", "training-data"],
-            default=[]
+            ["good", "error", "hallucination", "needs-fix", "training-data"],
+            default=[],
+            label_visibility="collapsed"
         )
         
         st.markdown("---")
         
         # Action buttons
-        col_submit, col_skip = st.columns(2)
+        if st.button("Submit Review", type="primary", use_container_width=True):
+            # Validate selection
+            if not st.session_state.get('score_choice'):
+                st.error("Please select Acceptable or Not Acceptable")
+                st.stop()
+            
+            # Save review
+            review_data = {
+                "review_id": review_id,
+                "timestamp": datetime.now().isoformat(),
+                "reviewer": st.session_state.get('reviewer_name', 'anonymous'),
+                
+                # Original data
+                "prompt": current_review.get('prompt'),
+                "context": current_review.get('context'),
+                "response": current_review.get('response'),
+                "expected_output": current_review.get('expected_output'),
+                "model": current_review.get('model'),
+                "feature": current_review.get('feature'),
+                
+                # Review data
+                "acceptable": st.session_state.score_choice == "acceptable",
+                "score_choice": st.session_state.score_choice,
+                "notes": notes,
+                "tags": tags
+            }
+            
+            # Save to storage
+            storage.save_review(review_data)
+            
+            # Mark as reviewed
+            mark_as_reviewed(review_id)
+            
+            # Reset score choice for next review
+            st.session_state.score_choice = None
+            
+            st.success("✓ Saved")
+            
+            # Move to next
+            st.rerun()
         
-        with col_submit:
-            if st.button("✅ Submit Review", type="primary", use_container_width=True):
-                # Save review
-                review_data = {
-                    "review_id": review_id,
-                    "timestamp": datetime.now().isoformat(),
-                    "reviewer": st.session_state.get('reviewer_name', 'anonymous'),
-                    
-                    # Original data
-                    "prompt": current_review.get('prompt'),
-                    "context": current_review.get('context'),
-                    "response": current_review.get('response'),
-                    "expected_output": current_review.get('expected_output'),
-                    "model": current_review.get('model'),
-                    "feature": current_review.get('feature'),
-                    
-                    # Review data
-                    "rating": rating,
-                    "criteria": {
-                        "accurate": accuracy,
-                        "relevant": relevant,
-                        "complete": complete,
-                        "well_formatted": well_formatted
-                    },
-                    "issues": {
-                        "hallucination": hallucination,
-                        "off_topic": off_topic,
-                        "incomplete": incomplete,
-                        "formatting_issue": formatting_issue,
-                        "other": other_issue
-                    },
-                    "notes": notes,
-                    "tags": tags
-                }
-                
-                # Save to storage
-                storage.save_review(review_data)
-                
-                # Mark as reviewed
-                mark_as_reviewed(review_id)
-                
-                st.success("✅ Review saved!")
-                st.balloons()
-                
-                # Move to next
-                st.rerun()
-        
-        with col_skip:
-            if st.button("⏭️ Skip", use_container_width=True):
-                # Move to end of queue
-                pending.append(pending.pop(0))
-                pending_file = Path("review_data/pending_reviews.json")
-                with open(pending_file, 'w') as f:
-                    json.dump(pending, f, indent=2)
-                st.rerun()
+        if st.button("Skip", use_container_width=True):
+            # Move to end of queue
+            pending.append(pending.pop(0))
+            pending_file = Path("review_data/pending_reviews.json")
+            with open(pending_file, 'w') as f:
+                json.dump(pending, f, indent=2)
+            st.rerun()
 
 
 def show_history_page():
