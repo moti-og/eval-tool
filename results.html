@@ -545,7 +545,14 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    alert(`✅ Success!\n\nReset ${result.count} reviews to pending queue.`);
+                    // Clear all submitted review tracking when resetting
+                    Object.keys(localStorage).forEach(key => {
+                        if (key.startsWith('submitted_')) {
+                            localStorage.removeItem(key);
+                        }
+                    });
+                    
+                    alert(`✅ Success!\n\nReset ${result.count} reviews to pending queue.\n\nAll submission tracking has been cleared.`);
                     window.location.href = '/';
                 } else {
                     alert('❌ Error: ' + (result.error || 'Unknown error'));

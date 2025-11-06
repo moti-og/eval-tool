@@ -376,6 +376,20 @@
             }
             
             const reviewer = document.getElementById('reviewer').value || 'anonymous';
+            
+            // Check if this user already submitted this review
+            if (isReviewSubmitted(currentReview.id || currentReview._id, reviewer)) {
+                alert('You have already submitted this review!');
+                // Move to next review
+                currentIndex++;
+                if (currentIndex < allReviews.length) {
+                    showReview(allReviews[currentIndex]);
+                } else {
+                    showSuccess();
+                }
+                return;
+            }
+            
             const notes = document.getElementById('notes').value;
             
             const reviewData = {
@@ -395,7 +409,13 @@
                 organization_name: currentReview.organization_name
             };
             
-            // Submit in background (don't wait)
+            // Mark as submitted immediately
+            markReviewAsSubmitted(currentReview.id || currentReview._id, reviewer);
+            
+            // Show brief success feedback
+            showBriefSuccess();
+            
+            // Submit in background
             fetch('/api/submit-review', {
                 method: 'POST',
                 headers: {
@@ -404,16 +424,46 @@
                 body: JSON.stringify(reviewData)
             }).catch(err => console.error('Error submitting review:', err));
             
-            // Immediately move to next review from memory
-            currentIndex++;
-            
-            if (currentIndex < allReviews.length) {
-                // Show next review instantly from memory
-                showReview(allReviews[currentIndex]);
-            } else {
-                // All done!
-                showSuccess();
+            // Move to next review after brief delay
+            setTimeout(() => {
+                currentIndex++;
+                
+                if (currentIndex < allReviews.length) {
+                    // Show next review instantly from memory
+                    showReview(allReviews[currentIndex]);
+                } else {
+                    // All done!
+                    showSuccess();
+                }
+            }, 600);
+        }
+        
+        function markReviewAsSubmitted(reviewId, reviewer) {
+            // Store in localStorage to prevent re-submission
+            const key = `submitted_${reviewer}`;
+            let submitted = JSON.parse(localStorage.getItem(key) || '[]');
+            if (!submitted.includes(reviewId)) {
+                submitted.push(reviewId);
+                localStorage.setItem(key, JSON.stringify(submitted));
             }
+        }
+        
+        function isReviewSubmitted(reviewId, reviewer) {
+            const key = `submitted_${reviewer}`;
+            const submitted = JSON.parse(localStorage.getItem(key) || '[]');
+            return submitted.includes(reviewId);
+        }
+        
+        function showBriefSuccess() {
+            const content = document.getElementById('content');
+            
+            content.innerHTML = `
+                <div style="text-align: center; padding: 100px 20px;">
+                    <div style="font-size: 64px; margin-bottom: 20px; color: #4ade80;">✓</div>
+                    <div style="font-size: 24px; font-weight: 600; color: #e0e0e0;">Review Submitted!</div>
+                    <div style="font-size: 14px; color: #8b949e; margin-top: 12px;">Loading next review...</div>
+                </div>
+            `;
         }
         
         function showNoReviews() {
