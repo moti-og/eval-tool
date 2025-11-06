@@ -14,7 +14,10 @@ async function connectToDatabase() {
   const client = await MongoClient.connect(process.env.MONGODB_URI, {
     maxPoolSize: 1,
     minPoolSize: 1,
-    maxIdleTimeMS: 60000
+    maxIdleTimeMS: 60000,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 10000,
+    connectTimeoutMS: 10000
   });
   
   cachedClient = client;
