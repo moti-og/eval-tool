@@ -12,19 +12,40 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 import csv
+import re
 
-# Import storage backends
-from review_storage import ReviewStorage, JSONStorage, CSVStorage
+# Import smart storage (auto-detects environment)
+from smart_storage import SmartStorage
 
-# Initialize storage (can switch to MongoDB later)
-STORAGE_TYPE = "json"  # Options: "json", "csv", "mongodb"
+# Initialize storage
+# - Local dev: Uses JSON file (fast, no setup)
+# - Production: Uses MongoDB (persistent, set MONGODB_URI env var)
+storage = SmartStorage()
 
-if STORAGE_TYPE == "json":
-    storage = JSONStorage("review_data/reviews.json")
-elif STORAGE_TYPE == "csv":
-    storage = CSVStorage("review_data/reviews.csv")
-else:
-    storage = JSONStorage("review_data/reviews.json")
+
+def remove_highlighting(html_text: str) -> str:
+    """Remove yellow/background-color highlighting from HTML text"""
+    if not html_text:
+        return html_text
+    
+    # Remove inline background-color styles from span tags
+    # This pattern matches style attributes that contain background-color
+    html_text = re.sub(
+        r'<span\s+style="[^"]*background-color:\s*rgb\([^)]+\);[^"]*">(.*?)</span>',
+        r'\1',
+        html_text,
+        flags=re.IGNORECASE
+    )
+    
+    # Also handle cases where background-color is the only style
+    html_text = re.sub(
+        r'<span\s+style="background-color:\s*rgb\([^)]+\);">(.*?)</span>',
+        r'\1',
+        html_text,
+        flags=re.IGNORECASE
+    )
+    
+    return html_text
 
 
 def load_pending_reviews() -> List[Dict]:
@@ -60,7 +81,7 @@ def main():
         page_title="Human Review",
         page_icon="📝",
         layout="wide",
-        initial_sidebar_state="collapsed"
+        initial_sidebar_state="expanded"
     )
     
     # Custom CSS for dark theme
@@ -137,8 +158,14 @@ def main():
         </style>
     """, unsafe_allow_html=True)
     
-    # Simple navigation
-    show_review_page()
+    # Top navigation tabs
+    tab1, tab2 = st.tabs(["📝 Review", "📊 Results & Analytics"])
+    
+    with tab1:
+        show_review_page()
+    
+    with tab2:
+        show_results_page()
 
 
 def show_review_page():
@@ -168,23 +195,38 @@ def show_review_page():
     with col1:
         # Conversation display        
         # Display prompt/user message
-        st.markdown('<p class="label-text">User</p>', unsafe_allow_html=True)
-        st.markdown('<div class="conversation-box">', unsafe_allow_html=True)
-        st.markdown(f'<p class="user-msg">{current_review.get("prompt", "")}</p>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(f'''
+        <p class="label-text">Project Title</p>
+        <div class="conversation-box">
+            <p class="user-msg">{current_review.get("prompt", "")}</p>
+        </div>
+        ''', unsafe_allow_html=True)
         
         # Display context if exists
         if current_review.get('context'):
-            st.markdown('<p class="label-text">Context</p>', unsafe_allow_html=True)
-            st.markdown('<div class="conversation-box">', unsafe_allow_html=True)
-            st.markdown(f'<p class="user-msg" style="font-size: 12px; color: #888;">{current_review.get("context", "")}</p>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+            context_html = f'<p class="user-msg" style="font-size: 12px; color: #888;">{current_review.get("context", "")}</p>'
+            
+            # Add agency user and organization if available
+            if current_review.get('agency_user'):
+                context_html += f'<p class="user-msg" style="font-size: 12px; color: #888; margin-top: 5px;">Agency User: {current_review.get("agency_user")}</p>'
+            if current_review.get('organization_name'):
+                context_html += f'<p class="user-msg" style="font-size: 12px; color: #888; margin-top: 5px;">Organization: {current_review.get("organization_name")}</p>'
+            
+            st.markdown(f'''
+            <p class="label-text">Context</p>
+            <div class="conversation-box">
+                {context_html}
+            </div>
+            ''', unsafe_allow_html=True)
         
-        # Display assistant response
-        st.markdown('<p class="label-text">Assistant</p>', unsafe_allow_html=True)
-        st.markdown('<div class="conversation-box">', unsafe_allow_html=True)
-        st.markdown(f'<div class="assistant-msg">{current_review.get("response", "")}</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Display assistant response (with highlighting removed)
+        response_text = remove_highlighting(current_review.get("response", ""))
+        st.markdown(f'''
+        <p class="label-text">Assistant</p>
+        <div class="conversation-box">
+            <div class="assistant-msg">{response_text}</div>
+        </div>
+        ''', unsafe_allow_html=True)
         
         # Expected output if available
         if current_review.get('expected_output'):
@@ -286,6 +328,145 @@ def show_review_page():
             with open(pending_file, 'w') as f:
                 json.dump(pending, f, indent=2)
             st.rerun()
+
+
+def show_results_page():
+    """Results and Analytics page"""
+    
+    reviews = storage.get_all_reviews()
+    
+    if not reviews:
+        st.info("No reviews yet. Start reviewing to see results here.")
+        return
+    
+    # Convert to DataFrame
+    df = pd.DataFrame(reviews)
+    
+    # Summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total Reviews", len(df))
+    
+    with col2:
+        acceptable_count = df['acceptable'].sum() if 'acceptable' in df.columns else 0
+        acceptable_pct = (acceptable_count / len(df) * 100) if len(df) > 0 else 0
+        st.metric("Acceptable", f"{acceptable_count}")
+        st.caption(f"↑ {acceptable_pct:.0f}%")
+    
+    with col3:
+        not_acceptable_count = len(df) - acceptable_count if 'acceptable' in df.columns else 0
+        st.metric("Not Acceptable", f"{not_acceptable_count}")
+    
+    with col4:
+        # Count unique organizations if available
+        orgs_count = df['organization_name'].nunique() if 'organization_name' in df.columns else 0
+        st.metric("Organizations", orgs_count)
+    
+    st.markdown("---")
+    st.markdown("### Recent Reviews")
+    
+    # Prepare table data - show most important columns
+    display_df = df.copy()
+    
+    # Sort by timestamp descending (newest first)
+    if 'timestamp' in display_df.columns:
+        display_df = display_df.sort_values('timestamp', ascending=False)
+    
+    # Create a clean table with key columns
+    table_data = []
+    for _, row in display_df.iterrows():
+        # Truncate prompt for table display
+        prompt = row.get('prompt', '')[:50] + '...' if len(str(row.get('prompt', ''))) > 50 else row.get('prompt', '')
+        
+        # Format timestamp to be more readable
+        timestamp = row.get('timestamp', '')[:19] if row.get('timestamp') else ''
+        
+        # Format acceptable as checkmark
+        acceptable = '✓' if row.get('acceptable', False) else '✗'
+        
+        # Get notes
+        notes = row.get('notes', '')
+        
+        # Get tags as comma-separated string
+        tags = ', '.join(row.get('tags', [])) if row.get('tags') else ''
+        
+        table_data.append({
+            'project_title': prompt,
+            'timestamp': timestamp,
+            'acceptable': acceptable,
+            'notes': notes,
+            'tags': tags
+        })
+    
+    # Display as dataframe with better column configuration
+    table_df = pd.DataFrame(table_data)
+    
+    st.dataframe(
+        table_df,
+        column_config={
+            "project_title": st.column_config.TextColumn(
+                "Project Title",
+                width="large",
+            ),
+            "timestamp": st.column_config.TextColumn(
+                "Timestamp",
+                width="medium",
+            ),
+            "acceptable": st.column_config.TextColumn(
+                "Acceptable",
+                width="small",
+            ),
+            "notes": st.column_config.TextColumn(
+                "Notes",
+                width="medium",
+            ),
+            "tags": st.column_config.TextColumn(
+                "Tags",
+                width="medium",
+            ),
+        },
+        hide_index=True,
+        use_container_width=True,
+    )
+    
+    st.markdown("---")
+    
+    # Export buttons
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📋 Export for Fine-Tuning", use_container_width=True):
+            # Format for fine-tuning
+            finetuning_data = []
+            for _, row in df.iterrows():
+                finetuning_data.append({
+                    "prompt": row.get('prompt', ''),
+                    "completion": row.get('response', ''),
+                    "metadata": {
+                        "acceptable": row.get('acceptable', False),
+                        "tags": row.get('tags', []),
+                        "notes": row.get('notes', '')
+                    }
+                })
+            
+            json_data = json.dumps(finetuning_data, indent=2)
+            st.download_button(
+                label="Download Fine-Tuning Data",
+                data=json_data,
+                file_name=f"finetuning_{datetime.now().strftime('%Y%m%d')}.json",
+                mime="application/json"
+            )
+    
+    with col2:
+        if st.button("📥 Download All Reviews (JSON)", use_container_width=True):
+            json_data = df.to_json(orient='records', indent=2)
+            st.download_button(
+                label="Download Reviews",
+                data=json_data,
+                file_name=f"reviews_{datetime.now().strftime('%Y%m%d')}.json",
+                mime="application/json"
+            )
 
 
 def show_history_page():
