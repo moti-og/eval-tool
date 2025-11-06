@@ -44,6 +44,19 @@
             align-items: center;
         }
         
+        .results-link {
+            color: #58a6ff;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .results-link:hover {
+            background: #1c1f26;
+        }
+        
         .reviewer-label {
             color: #888;
             font-size: 11px;
@@ -242,6 +255,7 @@
         <div class="header">
             <h1 id="title">Loading...</h1>
             <div class="header-right">
+                <a href="/results.html" class="results-link">📊 View Results</a>
                 <span class="reviewer-label">Reviewer</span>
                 <input type="text" id="reviewer" class="reviewer-input" placeholder="Your name..." value="">
             </div>

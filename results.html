@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Results - LLM Eval Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0e1117;
+            color: #fafafa;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #262730;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+        }
+
+        .nav-link {
+            color: #58a6ff;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .nav-link:hover {
+            background: #1c1f26;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: #1c1f26;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #262730;
+        }
+
+        .metric-label {
+            font-size: 14px;
+            color: #8b949e;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #fafafa;
+        }
+
+        .metric-caption {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 4px;
+        }
+
+        .table-container {
+            background: #1c1f26;
+            border-radius: 8px;
+            border: 1px solid #262730;
+            overflow: hidden;
+        }
+
+        .table-header {
+            padding: 20px;
+            border-bottom: 1px solid #262730;
+        }
+
+        .table-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #161b22;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 600;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 12px 16px;
+            border-top: 1px solid #262730;
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background: #161b22;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-acceptable {
+            background: #238636;
+            color: #fff;
+        }
+
+        .status-not-acceptable {
+            background: #da3633;
+            color: #fff;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8b949e;
+        }
+
+        .error {
+            background: #da3633;
+            color: #fff;
+            padding: 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8b949e;
+        }
+
+        .truncate {
+            max-width: 300px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .multiple-badge {
+            background: #1f6feb;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Review Results</h1>
+        <a href="/" class="nav-link">← Back to Reviews</a>
+    </div>
+
+    <div id="content">
+        <div class="loading">Loading results...</div>
+    </div>
+
+    <script>
+        async function loadResults() {
+            try {
+                const response = await fetch('/api/get-results');
+                const data = await response.json();
+
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                if (!data.reviews || data.reviews.length === 0) {
+                    showEmpty();
+                    return;
+                }
+
+                displayResults(data);
+
+            } catch (error) {
+                showError('Error loading results: ' + error.message);
+            }
+        }
+
+        function displayResults(data) {
+            const reviews = data.reviews;
+            
+            // Calculate metrics
+            const total = reviews.length;
+            const acceptable = reviews.filter(r => r.acceptable).length;
+            const notAcceptable = total - acceptable;
+            const acceptablePct = total > 0 ? (acceptable / total * 100).toFixed(0) : 0;
+            
+            // Get unique organizations
+            const organizations = new Set(reviews.map(r => r.organization_name).filter(Boolean));
+            const orgsCount = organizations.size;
+
+            // Detect duplicates (same review_id)
+            const reviewCounts = {};
+            reviews.forEach(r => {
+                if (r.review_id) {
+                    reviewCounts[r.review_id] = (reviewCounts[r.review_id] || 0) + 1;
+                }
+            });
+            const duplicateCount = Object.values(reviewCounts).filter(count => count > 1).length;
+
+            // Build HTML
+            let html = `
+                <div class="metrics">
+                    <div class="metric-card">
+                        <div class="metric-label">Total Reviews</div>
+                        <div class="metric-value">${total}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Acceptable</div>
+                        <div class="metric-value">${acceptable}</div>
+                        <div class="metric-caption">↑ ${acceptablePct}%</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Not Acceptable</div>
+                        <div class="metric-value">${notAcceptable}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Organizations</div>
+                        <div class="metric-value">${orgsCount}</div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>Recent Reviews</h2>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Project Title</th>
+                                <th>Timestamp</th>
+                                <th>Status</th>
+                                <th>Reviewer</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            // Sort by timestamp (newest first)
+            reviews.sort((a, b) => {
+                const dateA = new Date(a.submitted_at || a.timestamp);
+                const dateB = new Date(b.submitted_at || b.timestamp);
+                return dateB - dateA;
+            });
+
+            reviews.forEach(review => {
+                const prompt = review.prompt || 'N/A';
+                const truncatedPrompt = prompt.length > 50 ? prompt.substring(0, 50) + '...' : prompt;
+                
+                const timestamp = review.submitted_at || review.timestamp;
+                const formattedTime = timestamp ? new Date(timestamp).toLocaleString() : 'N/A';
+                
+                const statusClass = review.acceptable ? 'status-acceptable' : 'status-not-acceptable';
+                const statusText = review.acceptable ? '✓ Acceptable' : '✗ Not Acceptable';
+                
+                const reviewer = review.reviewer || 'Anonymous';
+                const notes = review.notes || '';
+                const truncatedNotes = notes.length > 80 ? notes.substring(0, 80) + '...' : notes;
+
+                const isMultiple = reviewCounts[review.review_id] > 1;
+                const multipleBadge = isMultiple ? `<span class="multiple-badge">×${reviewCounts[review.review_id]}</span>` : '';
+
+                html += `
+                    <tr>
+                        <td class="truncate">${truncatedPrompt}${multipleBadge}</td>
+                        <td>${formattedTime}</td>
+                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        <td>${reviewer}</td>
+                        <td class="truncate">${truncatedNotes}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            document.getElementById('content').innerHTML = html;
+        }
+
+        function showError(message) {
+            document.getElementById('content').innerHTML = `
+                <div class="error">${message}</div>
+            `;
+        }
+
+        function showEmpty() {
+            document.getElementById('content').innerHTML = `
+                <div class="empty">
+                    <p>No reviews yet. <a href="/" class="nav-link">Start reviewing</a> to see results here.</p>
+                </div>
+            `;
+        }
+
+        // Load results on page load
+        loadResults();
+    </script>
+</body>
+</html>
+
