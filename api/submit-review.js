@@ -1,18 +1,25 @@
 /**
  * Submit a review to MongoDB
  */
-const { MongoClient, ObjectId } = require('mongodb');
+const { MongoClient } = require('mongodb');
 
 let cachedClient = null;
+let cachedDb = null;
 
 async function connectToDatabase() {
-  if (cachedClient) {
-    return cachedClient;
+  if (cachedClient && cachedDb) {
+    return cachedDb;
   }
   
-  const client = await MongoClient.connect(process.env.MONGODB_URI);
+  const client = await MongoClient.connect(process.env.MONGODB_URI, {
+    maxPoolSize: 1,
+    minPoolSize: 1,
+    maxIdleTimeMS: 60000
+  });
+  
   cachedClient = client;
-  return client;
+  cachedDb = client.db('llm_reviews');
+  return cachedDb;
 }
 
 module.exports = async (req, res) => {
@@ -33,21 +40,18 @@ module.exports = async (req, res) => {
   try {
     const reviewData = req.body;
     
-    const client = await connectToDatabase();
-    const db = client.db('llm_reviews');
+    const db = await connectToDatabase();
     
-    // Save to completed_reviews
-    await db.collection('completed_reviews').insertOne({
-      ...reviewData,
-      submitted_at: new Date()
-    });
-    
-    // Remove from pending_reviews
-    if (reviewData.review_id) {
-      await db.collection('pending_reviews').deleteOne({
-        id: reviewData.review_id
-      });
-    }
+    // Parallel operations for speed
+    await Promise.all([
+      db.collection('completed_reviews').insertOne({
+        ...reviewData,
+        submitted_at: new Date()
+      }),
+      reviewData.review_id ? 
+        db.collection('pending_reviews').deleteOne({ id: reviewData.review_id }) :
+        Promise.resolve()
+    ]);
     
     res.json({ success: true });
     

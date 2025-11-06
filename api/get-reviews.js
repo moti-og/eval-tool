@@ -4,15 +4,22 @@
 const { MongoClient } = require('mongodb');
 
 let cachedClient = null;
+let cachedDb = null;
 
 async function connectToDatabase() {
-  if (cachedClient) {
-    return cachedClient;
+  if (cachedClient && cachedDb) {
+    return cachedDb;
   }
   
-  const client = await MongoClient.connect(process.env.MONGODB_URI);
+  const client = await MongoClient.connect(process.env.MONGODB_URI, {
+    maxPoolSize: 1,
+    minPoolSize: 1,
+    maxIdleTimeMS: 60000
+  });
+  
   cachedClient = client;
-  return client;
+  cachedDb = client.db('llm_reviews');
+  return cachedDb;
 }
 
 module.exports = async (req, res) => {
@@ -22,22 +29,23 @@ module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   
   try {
-    const client = await connectToDatabase();
-    const db = client.db('llm_reviews');
+    const db = await connectToDatabase();
     const collection = db.collection('pending_reviews');
     
-    // Get all pending reviews
-    const reviews = await collection.find({}).limit(100).toArray();
+    // Just get count and first review (faster)
+    const [count, firstReview] = await Promise.all([
+      collection.countDocuments(),
+      collection.findOne({})
+    ]);
     
-    if (!reviews || reviews.length === 0) {
+    if (!firstReview) {
       return res.json({ error: 'No reviews available' });
     }
     
-    // Return first review with count
     res.json({
-      review: reviews[0],
-      remaining: reviews.length,
-      total: reviews.length
+      review: firstReview,
+      remaining: count,
+      total: count
     });
     
   } catch (error) {
