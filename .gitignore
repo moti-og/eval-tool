@@ -15,6 +15,9 @@ ENV/
 # Results
 results/*.json
 
+# Review data (runtime)
+review_data/*.json
+
 # IDE
 .vscode/
 .idea/
