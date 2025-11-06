@@ -214,6 +214,90 @@
             cursor: not-allowed;
         }
         
+        .info-btn {
+            background: #1f6feb;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .info-btn:hover {
+            background: #1a5bd8;
+        }
+        
+        .info-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .info-modal.visible {
+            display: flex;
+        }
+        
+        .info-content {
+            background: #1c1f26;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 32px;
+            max-width: 600px;
+            width: 90%;
+        }
+        
+        .info-content h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #58a6ff;
+        }
+        
+        .info-content ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .info-content li {
+            padding: 12px 0;
+            padding-left: 32px;
+            position: relative;
+            line-height: 1.6;
+        }
+        
+        .info-content li:before {
+            content: "→";
+            position: absolute;
+            left: 8px;
+            color: #58a6ff;
+            font-weight: bold;
+        }
+        
+        .info-close {
+            background: #333;
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 24px;
+            transition: background 0.2s;
+        }
+        
+        .info-close:hover {
+            background: #444;
+        }
+        
         .loading {
             text-align: center;
             padding: 60px;
@@ -255,6 +339,7 @@
         <div class="header">
             <h1 id="title">Loading...</h1>
             <div class="header-right">
+                <button class="info-btn" onclick="showInfo()">ℹ️ What is this?</button>
                 <a href="/results.html" class="results-link">📊 View Results</a>
                 <span class="reviewer-label">Reviewer</span>
                 <input type="text" id="reviewer" class="reviewer-input" placeholder="Your name..." value="">
@@ -263,6 +348,19 @@
         
         <div id="content" class="loading">
             <p>Loading reviews...</p>
+        </div>
+    </div>
+    
+    <!-- Info Modal -->
+    <div id="infoModal" class="info-modal" onclick="closeInfo(event)">
+        <div class="info-content" onclick="event.stopPropagation()">
+            <h2>What is this?</h2>
+            <ul>
+                <li><strong>Prototype tool:</strong> Basic HTML/JavaScript frontend with MongoDB backend — serverless architecture for fast iteration</li>
+                <li><strong>Data source:</strong> ONLY Sampleville test data; storing responses in MongoDB to enable collaborative feedback and testing</li>
+                <li><strong>How to use:</strong> Internal tool for PRO team to build and maintain ourselves as long as we can access the underlying data</li>
+            </ul>
+            <button class="info-close" onclick="closeInfo()">Got it</button>
         </div>
     </div>
     
@@ -490,6 +588,17 @@
             document.getElementById('content').innerHTML = `
                 <div class="error">${message}</div>
             `;
+        }
+        
+        // Info modal functions
+        function showInfo() {
+            document.getElementById('infoModal').classList.add('visible');
+        }
+        
+        function closeInfo(event) {
+            if (!event || event.target.id === 'infoModal') {
+                document.getElementById('infoModal').classList.remove('visible');
+            }
         }
         
         // Load all reviews once on page load
