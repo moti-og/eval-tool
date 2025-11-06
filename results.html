@@ -135,8 +135,85 @@
             font-size: 14px;
         }
 
-        tr:hover {
+        tr.review-row {
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        tr.review-row:hover {
             background: #161b22;
+        }
+
+        tr.expanded-content {
+            display: none;
+        }
+
+        tr.expanded-content.visible {
+            display: table-row;
+        }
+
+        .expand-icon {
+            display: inline-block;
+            margin-right: 8px;
+            transition: transform 0.2s;
+            color: #58a6ff;
+        }
+
+        tr.review-row.expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .content-detail {
+            background: #0e1117;
+            padding: 16px;
+            border-radius: 6px;
+            margin: 8px 0;
+        }
+
+        .content-detail h4 {
+            color: #8b949e;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .content-detail .content-text {
+            color: #e0e0e0;
+            line-height: 1.5;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .nested-reviews {
+            background: #0e1117;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 3px solid #1f6feb;
+        }
+
+        .nested-review-item {
+            padding: 12px;
+            border-bottom: 1px solid #262730;
+            display: grid;
+            grid-template-columns: 150px 100px 1fr 150px;
+            gap: 12px;
+        }
+
+        .nested-review-item:last-child {
+            border-bottom: none;
+        }
+
+        .nested-label {
+            color: #8b949e;
+            font-size: 11px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .nested-value {
+            color: #e0e0e0;
+            font-size: 13px;
         }
 
         .status-badge {
@@ -243,14 +320,22 @@
             const organizations = new Set(reviews.map(r => r.organization_name).filter(Boolean));
             const orgsCount = organizations.size;
 
-            // Detect duplicates (same review_id)
-            const reviewCounts = {};
+            // Group reviews by review_id
+            const groupedReviews = {};
             reviews.forEach(r => {
-                if (r.review_id) {
-                    reviewCounts[r.review_id] = (reviewCounts[r.review_id] || 0) + 1;
+                const id = r.review_id || r._id;
+                if (!groupedReviews[id]) {
+                    groupedReviews[id] = [];
                 }
+                groupedReviews[id].push(r);
             });
-            const duplicateCount = Object.values(reviewCounts).filter(count => count > 1).length;
+
+            // Sort groups by latest timestamp
+            const sortedGroups = Object.values(groupedReviews).sort((a, b) => {
+                const dateA = new Date(a[0].submitted_at || a[0].timestamp);
+                const dateB = new Date(b[0].submitted_at || b[0].timestamp);
+                return dateB - dateA;
+            });
 
             // Build HTML
             let html = `
@@ -276,52 +361,59 @@
 
                 <div class="table-container">
                     <div class="table-header">
-                        <h2>Recent Reviews</h2>
+                        <h2>Recent Reviews (click to expand)</h2>
                     </div>
                     <table>
                         <thead>
                             <tr>
                                 <th>Project Title</th>
-                                <th>Timestamp</th>
+                                <th>Reviews</th>
                                 <th>Status</th>
-                                <th>Reviewer</th>
-                                <th>Notes</th>
+                                <th>Organization</th>
+                                <th>Last Updated</th>
                             </tr>
                         </thead>
                         <tbody>
             `;
 
-            // Sort by timestamp (newest first)
-            reviews.sort((a, b) => {
-                const dateA = new Date(a.submitted_at || a.timestamp);
-                const dateB = new Date(b.submitted_at || b.timestamp);
-                return dateB - dateA;
-            });
-
-            reviews.forEach(review => {
-                const prompt = review.prompt || 'N/A';
-                const truncatedPrompt = prompt.length > 50 ? prompt.substring(0, 50) + '...' : prompt;
+            // Render each group
+            sortedGroups.forEach((group, idx) => {
+                const firstReview = group[0];
+                const prompt = firstReview.prompt || 'N/A';
+                const truncatedPrompt = prompt.length > 60 ? prompt.substring(0, 60) + '...' : prompt;
                 
-                const timestamp = review.submitted_at || review.timestamp;
-                const formattedTime = timestamp ? new Date(timestamp).toLocaleString() : 'N/A';
+                const latestTimestamp = firstReview.submitted_at || firstReview.timestamp;
+                const formattedTime = latestTimestamp ? new Date(latestTimestamp).toLocaleString() : 'N/A';
                 
-                const statusClass = review.acceptable ? 'status-acceptable' : 'status-not-acceptable';
-                const statusText = review.acceptable ? '✓ Acceptable' : '✗ Not Acceptable';
+                const org = firstReview.organization_name || 'Unknown';
+                const reviewCount = group.length;
                 
-                const reviewer = review.reviewer || 'Anonymous';
-                const notes = review.notes || '';
-                const truncatedNotes = notes.length > 80 ? notes.substring(0, 80) + '...' : notes;
-
-                const isMultiple = reviewCounts[review.review_id] > 1;
-                const multipleBadge = isMultiple ? `<span class="multiple-badge">×${reviewCounts[review.review_id]}</span>` : '';
+                // Calculate status summary for the group
+                const acceptableCount = group.filter(r => r.acceptable).length;
+                const statusSummary = reviewCount > 1 ? 
+                    `${acceptableCount}/${reviewCount} acceptable` : 
+                    (group[0].acceptable ? '✓ Acceptable' : '✗ Not Acceptable');
+                
+                const statusClass = acceptableCount === reviewCount ? 'status-acceptable' : 
+                                   acceptableCount === 0 ? 'status-not-acceptable' : 
+                                   'status-badge';
 
                 html += `
-                    <tr>
-                        <td class="truncate">${truncatedPrompt}${multipleBadge}</td>
+                    <tr class="review-row" data-row-id="${idx}">
+                        <td>
+                            <span class="expand-icon">▶</span>
+                            ${truncatedPrompt}
+                            ${reviewCount > 1 ? `<span class="multiple-badge">×${reviewCount}</span>` : ''}
+                        </td>
+                        <td>${reviewCount}</td>
+                        <td><span class="status-badge ${statusClass}">${statusSummary}</span></td>
+                        <td class="truncate">${org}</td>
                         <td>${formattedTime}</td>
-                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                        <td>${reviewer}</td>
-                        <td class="truncate">${truncatedNotes}</td>
+                    </tr>
+                    <tr class="expanded-content" data-content-id="${idx}">
+                        <td colspan="5">
+                            ${renderExpandedContent(group, firstReview)}
+                        </td>
                     </tr>
                 `;
             });
@@ -333,6 +425,89 @@
             `;
 
             document.getElementById('content').innerHTML = html;
+            
+            // Add click handlers for expandable rows
+            document.querySelectorAll('.review-row').forEach(row => {
+                row.addEventListener('click', function() {
+                    const rowId = this.getAttribute('data-row-id');
+                    const contentRow = document.querySelector(`tr.expanded-content[data-content-id="${rowId}"]`);
+                    
+                    this.classList.toggle('expanded');
+                    contentRow.classList.toggle('visible');
+                });
+            });
+        }
+
+        function renderExpandedContent(group, firstReview) {
+            let html = `
+                <div class="content-detail">
+                    <h4>Full Project Title</h4>
+                    <div class="content-text">${firstReview.prompt || 'N/A'}</div>
+                </div>
+            `;
+
+            if (group.length === 1) {
+                // Single review
+                const review = group[0];
+                const timestamp = review.submitted_at || review.timestamp;
+                const formattedTime = timestamp ? new Date(timestamp).toLocaleString() : 'N/A';
+                const statusClass = review.acceptable ? 'status-acceptable' : 'status-not-acceptable';
+                const statusText = review.acceptable ? '✓ Acceptable' : '✗ Not Acceptable';
+
+                html += `
+                    <div class="content-detail">
+                        <h4>Review Details</h4>
+                        <div class="content-text">
+                            <p><strong>Reviewer:</strong> ${review.reviewer || 'Anonymous'}</p>
+                            <p><strong>Status:</strong> <span class="status-badge ${statusClass}">${statusText}</span></p>
+                            <p><strong>Timestamp:</strong> ${formattedTime}</p>
+                            ${review.notes ? `<p><strong>Notes:</strong> ${review.notes}</p>` : ''}
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Multiple reviews - show nested
+                html += `
+                    <div class="content-detail">
+                        <h4>Multiple Reviews (${group.length})</h4>
+                        <div class="nested-reviews">
+                `;
+
+                group.forEach((review, idx) => {
+                    const timestamp = review.submitted_at || review.timestamp;
+                    const formattedTime = timestamp ? new Date(timestamp).toLocaleString() : 'N/A';
+                    const statusClass = review.acceptable ? 'status-acceptable' : 'status-not-acceptable';
+                    const statusText = review.acceptable ? '✓ Acceptable' : '✗ Not Acceptable';
+
+                    html += `
+                        <div class="nested-review-item">
+                            <div>
+                                <div class="nested-label">Reviewer ${idx + 1}</div>
+                                <div class="nested-value">${review.reviewer || 'Anonymous'}</div>
+                            </div>
+                            <div>
+                                <div class="nested-label">Status</div>
+                                <div class="nested-value"><span class="status-badge ${statusClass}">${statusText}</span></div>
+                            </div>
+                            <div>
+                                <div class="nested-label">Notes</div>
+                                <div class="nested-value">${review.notes || 'No notes'}</div>
+                            </div>
+                            <div>
+                                <div class="nested-label">Timestamp</div>
+                                <div class="nested-value">${formattedTime}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            return html;
         }
 
         function showError(message) {
