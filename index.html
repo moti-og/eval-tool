@@ -253,12 +253,9 @@
     </div>
     
     <script>
-        // Configuration loaded from serverless function
-        let CONFIG = null;
         let currentReview = null;
         let selectedScore = null;
-        let allReviews = [];
-        let currentIndex = 0;
+        let totalRemaining = 0;
         
         // Load reviewer name from localStorage
         const savedReviewer = localStorage.getItem('reviewer_name');
@@ -271,49 +268,19 @@
             localStorage.setItem('reviewer_name', e.target.value);
         });
         
-        async function loadConfig() {
+        async function loadReview() {
             try {
-                const response = await fetch('/api/config');
-                CONFIG = await response.json();
-                
-                if (!CONFIG.apiUrl || !CONFIG.apiKey) {
-                    showError('Configuration error: MongoDB Data API not configured. Check Vercel environment variables.');
-                    return false;
-                }
-                
-                return true;
-            } catch (error) {
-                showError('Error loading configuration: ' + error.message);
-                return false;
-            }
-        }
-        
-        async function loadReviews() {
-            try {
-                const response = await fetch(`${CONFIG.apiUrl}/action/find`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'api-key': CONFIG.apiKey
-                    },
-                    body: JSON.stringify({
-                        dataSource: CONFIG.dataSource,
-                        database: CONFIG.database,
-                        collection: CONFIG.pendingCollection,
-                        limit: 100
-                    })
-                });
-                
+                const response = await fetch('/api/get-reviews');
                 const data = await response.json();
                 
-                if (!data.documents || data.documents.length === 0) {
+                if (data.error) {
                     showNoReviews();
                     return;
                 }
                 
-                allReviews = data.documents;
-                currentIndex = 0;
-                showReview(allReviews[currentIndex]);
+                currentReview = data.review;
+                totalRemaining = data.remaining;
+                showReview(currentReview);
                 
             } catch (error) {
                 showError('Error loading reviews: ' + error.message);
@@ -324,8 +291,7 @@
             currentReview = review;
             selectedScore = null;
             
-            const remaining = allReviews.length - currentIndex;
-            document.getElementById('title').textContent = `Human review - ${remaining} remaining`;
+            document.getElementById('title').textContent = `Human review - ${totalRemaining} remaining`;
             
             const contextHtml = review.context ? `
                 <div class="label">Context</div>
@@ -409,42 +375,21 @@
             };
             
             try {
-                // Save to completed_reviews
-                await fetch(`${CONFIG.apiUrl}/action/insertOne`, {
+                const response = await fetch('/api/submit-review', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'api-key': CONFIG.apiKey
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        dataSource: CONFIG.dataSource,
-                        database: CONFIG.database,
-                        collection: CONFIG.completedCollection,
-                        document: reviewData
-                    })
+                    body: JSON.stringify(reviewData)
                 });
                 
-                // Remove from pending_reviews
-                await fetch(`${CONFIG.apiUrl}/action/deleteOne`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'api-key': CONFIG.apiKey
-                    },
-                    body: JSON.stringify({
-                        dataSource: CONFIG.dataSource,
-                        database: CONFIG.database,
-                        collection: CONFIG.pendingCollection,
-                        filter: { _id: currentReview._id }
-                    })
-                });
+                const result = await response.json();
                 
-                // Move to next review
-                currentIndex++;
-                if (currentIndex < allReviews.length) {
-                    showReview(allReviews[currentIndex]);
+                if (result.success) {
+                    // Load next review
+                    await loadReview();
                 } else {
-                    showSuccess();
+                    showError('Error: ' + (result.error || 'Unknown error'));
                 }
                 
             } catch (error) {
@@ -478,15 +423,8 @@
             `;
         }
         
-        // Initialize app: load config then reviews
-        async function init() {
-            const configLoaded = await loadConfig();
-            if (configLoaded) {
-                await loadReviews();
-            }
-        }
-        
-        init();
+        // Load review on page load
+        loadReview();
     </script>
 </body>
 </html>
