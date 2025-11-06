@@ -44,6 +44,26 @@
             background: #1c1f26;
         }
 
+        .reset-btn {
+            background: #da3633;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .reset-btn:hover {
+            background: #c92a2a;
+        }
+
+        .reset-btn:disabled {
+            background: #4a4a4a;
+            cursor: not-allowed;
+        }
+
         .metrics {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -177,7 +197,10 @@
 <body>
     <div class="header">
         <h1>📊 Review Results</h1>
-        <a href="/" class="nav-link">← Back to Reviews</a>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <button id="resetBtn" class="reset-btn">🔄 Reset All Reviews</button>
+            <a href="/" class="nav-link">← Back to Reviews</a>
+        </div>
     </div>
 
     <div id="content">
@@ -325,6 +348,42 @@
                 </div>
             `;
         }
+
+        // Reset reviews handler
+        document.getElementById('resetBtn').addEventListener('click', async () => {
+            if (!confirm('Reset all reviews? This will restore all 9 items to the pending queue.\n\nAny completed reviews will remain in the results.')) {
+                return;
+            }
+
+            const btn = document.getElementById('resetBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Resetting...';
+
+            try {
+                const response = await fetch('/api/reset-reviews', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(`✅ Success!\n\nReset ${result.count} reviews to pending queue.`);
+                    window.location.href = '/';
+                } else {
+                    alert('❌ Error: ' + (result.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.textContent = '🔄 Reset All Reviews';
+                }
+
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = '🔄 Reset All Reviews';
+            }
+        });
 
         // Load results on page load
         loadResults();

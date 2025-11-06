@@ -57,11 +57,17 @@ def seed_mongodb():
         result = db['pending_reviews'].insert_many(reviews)
         print(f"✅ Uploaded {len(result.inserted_ids)} reviews to MongoDB")
         
+        # Also create/update backup for reset functionality
+        db['backup_reviews'].delete_many({})
+        db['backup_reviews'].insert_many(reviews)
+        print(f"💾 Created backup of {len(reviews)} reviews (for reset)")
+        
         # Show summary
         print(f"\n📊 Summary:")
         print(f"   Database: llm_reviews")
         print(f"   Collection: pending_reviews")
         print(f"   Documents: {db['pending_reviews'].count_documents({})}")
+        print(f"   Backup: {db['backup_reviews'].count_documents({})}")
         
         client.close()
         return True
