@@ -4,6 +4,13 @@ echo   Eval Tool - Local Development
 echo ========================================
 echo.
 
+REM Kill any existing Python/Streamlit processes
+echo Stopping any existing servers...
+taskkill /F /IM python.exe >nul 2>&1
+taskkill /F /IM node.exe >nul 2>&1
+timeout /t 1 >nul
+echo.
+
 REM Check if vercel is installed
 where vercel >nul 2>nul
 if %errorlevel% neq 0 (
