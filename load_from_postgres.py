@@ -51,23 +51,28 @@ class PostgresLoader:
             query = f"""
             SELECT 
                 a.id as ai_audit_id,
-                a.prompt as user_prompt,
+                p.title as user_prompt,
                 string_agg(c.description, '\n\n---CRITERIA---\n\n' ORDER BY c.created_at) as llm_response,
                 'User saved ' || COUNT(c.id) || ' criteria within ' || 
                     ROUND(AVG(EXTRACT(EPOCH FROM (c.created_at::timestamp - a.created_at::timestamp))/60)) || ' min' as context_data,
                 'unknown' as model_name,
                 'procurement_criteria_generation' as feature_name,
                 a.user_id,
-                a.created_at
+                a.created_at,
+                COALESCE(p.contact_first_name || ' ' || p.contact_last_name, 'Unknown') as agency_user,
+                COALESCE(o.name, 'Unknown Organization') as organization_name
             FROM ai_audit a
             JOIN project p ON a.project_id = p.id
+            JOIN government g ON p.government_id = g.id
+            LEFT JOIN organization o ON g.organization_id = o.id
             JOIN project_section ps ON p.id = ps.project_id
             JOIN criteria c ON ps.id = c.project_section_id
             WHERE c.created_at::timestamp BETWEEN a.created_at::timestamp 
                   AND (a.created_at::timestamp + INTERVAL '15 minutes')
               AND c.description IS NOT NULL
               AND LENGTH(c.description) > 100
-            GROUP BY a.id, a.prompt, a.user_id, a.created_at
+              AND g.code = 'sampleville'
+            GROUP BY a.id, p.title, a.user_id, a.created_at, p.contact_first_name, p.contact_last_name, o.name
             HAVING COUNT(c.id) > 0
             ORDER BY a.created_at DESC
             LIMIT {limit}
@@ -113,6 +118,8 @@ class PostgresLoader:
                 "model": record.get('model_name', 'unknown'),
                 "feature": record.get('feature_name', 'unknown'),
                 "user_id": record.get('user_id', ''),
+                "agency_user": record.get('agency_user', 'Unknown'),
+                "organization_name": record.get('organization_name', 'Unknown Organization'),
                 "expected_output": None,
                 "metadata": {
                     "source": "postgres",
