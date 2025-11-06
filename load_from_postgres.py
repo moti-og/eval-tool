@@ -130,35 +130,52 @@ class PostgresLoader:
         
         return review_items
     
-    def save_to_pending_reviews(self, review_items):
+    def save_to_pending_reviews(self, review_items, replace=True):
         """
         Save items to pending reviews file
         
         Args:
             review_items: List of formatted review items
+            replace: If True, replace existing data. If False, append and avoid duplicates.
+                     Default True for clean deployments.
         """
         pending_file = Path("review_data/pending_reviews.json")
+        backup_file = Path("review_data/master_reviews_backup.json")
         pending_file.parent.mkdir(exist_ok=True)
         
-        # Load existing pending reviews
-        if pending_file.exists():
-            with open(pending_file) as f:
-                existing = json.load(f)
+        if replace:
+            # REPLACE mode: Wipe existing data and use only new items
+            # This is the default for clean deployments
+            with open(pending_file, 'w') as f:
+                json.dump(review_items, f, indent=2)
+            
+            # Also create backup for reload functionality
+            with open(backup_file, 'w') as f:
+                json.dump(review_items, f, indent=2)
+            
+            print(f"✓ Replaced pending reviews with {len(review_items)} items")
+            print(f"✓ Created backup at {backup_file}")
+            print(f"  Total pending: {len(review_items)}")
         else:
-            existing = []
-        
-        # Add new items (avoiding duplicates)
-        existing_ids = {item.get('id') for item in existing}
-        new_items = [item for item in review_items if item.get('id') not in existing_ids]
-        
-        existing.extend(new_items)
-        
-        # Save back
-        with open(pending_file, 'w') as f:
-            json.dump(existing, f, indent=2)
-        
-        print(f"✓ Added {len(new_items)} new items to review queue")
-        print(f"  Total pending: {len(existing)}")
+            # APPEND mode: Keep existing and add new (avoiding duplicates)
+            if pending_file.exists():
+                with open(pending_file) as f:
+                    existing = json.load(f)
+            else:
+                existing = []
+            
+            # Add new items (avoiding duplicates)
+            existing_ids = {item.get('id') for item in existing}
+            new_items = [item for item in review_items if item.get('id') not in existing_ids]
+            
+            existing.extend(new_items)
+            
+            # Save back
+            with open(pending_file, 'w') as f:
+                json.dump(existing, f, indent=2)
+            
+            print(f"✓ Added {len(new_items)} new items to review queue")
+            print(f"  Total pending: {len(existing)}")
 
 
 def main():
@@ -167,15 +184,23 @@ def main():
     
     Usage:
         python load_from_postgres.py
+    
+    IMPORTANT FOR DEPLOYMENT:
+    - This script WIPES existing pending_reviews.json and replaces it with fresh data
+    - Only loads 10 items from Sampleville (g.code = 'sampleville')
+    - After running, pending_reviews.json will have exactly 10 items
     """
     
     # Initialize loader
     loader = PostgresLoader()
     
-    print("Loading conversations from Postgres...")
+    print("=" * 60)
+    print("Loading Sampleville data for review")
+    print("=" * 60)
+    print()
     
-    # Option 1: Use default query
-    records = loader.load_conversations(limit=50)
+    # Option 1: Use default query (limited to 10 for Sampleville testing)
+    records = loader.load_conversations(limit=10)
     
     # Option 2: Use custom query
     # custom_query = '''
@@ -190,10 +215,21 @@ def main():
     # Format for review
     review_items = loader.format_for_review(records)
     
-    # Save to pending reviews
-    loader.save_to_pending_reviews(review_items)
+    # Save to pending reviews (REPLACES existing data by default)
+    # This ensures a clean slate with only Sampleville data for deployment
+    loader.save_to_pending_reviews(review_items, replace=True)
     
-    print("\n✓ Done! Run 'streamlit run human_review_app.py' to start reviewing")
+    # To append instead of replace, use: loader.save_to_pending_reviews(review_items, replace=False)
+    
+    print()
+    print("=" * 60)
+    print("✅ DEPLOYMENT READY")
+    print("=" * 60)
+    print(f"Loaded exactly {len(review_items)} Sampleville items")
+    print("Old data has been WIPED and replaced")
+    print()
+    print("Next step: Run 'streamlit run human_review_app.py --server.port 8069'")
+    print("=" * 60)
 
 
 if __name__ == '__main__':

@@ -59,6 +59,42 @@ def load_pending_reviews() -> List[Dict]:
         return json.load(f)
 
 
+def reload_pending_reviews():
+    """
+    Reload pending reviews from the master backup file
+    This allows multiple reviewers to review the same data
+    
+    Simple approach:
+    1. Load from Postgres ONCE using load_from_postgres.py
+    2. Keep a backup of those items
+    3. Reload from backup when queue is empty
+    """
+    try:
+        pending_file = Path("review_data/pending_reviews.json")
+        backup_file = Path("review_data/master_reviews_backup.json")
+        
+        # If backup doesn't exist, create it from current pending
+        if not backup_file.exists() and pending_file.exists():
+            import shutil
+            shutil.copy(pending_file, backup_file)
+            return True, "✓ Created backup. Reload again to reset queue."
+        
+        # Reload from backup
+        if backup_file.exists():
+            import shutil
+            shutil.copy(backup_file, pending_file)
+            
+            with open(backup_file) as f:
+                items = json.load(f)
+            
+            return True, f"✓ Reloaded {len(items)} items from backup"
+        else:
+            return False, "No backup found. Please run load_from_postgres.py first."
+            
+    except Exception as e:
+        return False, f"Error: {str(e)}"
+
+
 def mark_as_reviewed(review_id: str):
     """Remove from pending after review"""
     pending_file = Path("review_data/pending_reviews.json")
@@ -76,13 +112,57 @@ def mark_as_reviewed(review_id: str):
         json.dump(pending, f, indent=2)
 
 
+def setup_controls_menu():
+    """Setup controls menu in top right"""
+    # Create columns to position the popover in top right
+    col1, col2, col3 = st.columns([6, 1, 0.5])
+    
+    with col3:
+        with st.popover("⚙️", use_container_width=True):
+            st.markdown("### Settings")
+            
+            # Reviewer identification
+            if 'reviewer_name' not in st.session_state:
+                st.session_state.reviewer_name = 'anonymous'
+            
+            reviewer_name = st.text_input(
+                "Your Name",
+                value=st.session_state.reviewer_name,
+                placeholder="Enter your name",
+                key="reviewer_name_input"
+            )
+            st.session_state.reviewer_name = reviewer_name
+            
+            st.markdown("---")
+            st.markdown("**🔄 Reset Queue**")
+            st.caption("Reload items to allow multiple reviewers to review the same data")
+            
+            if st.button("🔄 Wipe & Reload Queue", use_container_width=True):
+                with st.spinner("Reloading from database..."):
+                    success, message = reload_pending_reviews()
+                    if success:
+                        st.success(message)
+                        st.info("Queue reset! Multiple reviewers can now review the same items.")
+                        st.rerun()
+                    else:
+                        st.error(message)
+            
+            st.markdown("---")
+            
+            # Show storage info
+            storage_type = "MongoDB" if hasattr(storage.backend, 'db') else "JSON"
+            st.caption(f"💾 Storage: {storage_type}")
+
+
 def main():
     st.set_page_config(
         page_title="Human Review",
         page_icon="📝",
-        layout="wide",
-        initial_sidebar_state="expanded"
+        layout="wide"
     )
+    
+    # Setup controls menu in top right
+    setup_controls_menu()
     
     # Custom CSS for dark theme
     st.markdown("""
@@ -135,13 +215,24 @@ def main():
             font-weight: 500;
         }
         
-        /* Sidebar styling */
-        .css-1d391kg {
-            background-color: #1a1d24;
+        /* Reviewer input styling */
+        .stTextInput input {
+            background-color: #1a1d24 !important;
+            border: 1px solid #333 !important;
+            border-radius: 6px !important;
+            color: #e0e0e0 !important;
+            padding: 8px 12px !important;
+            font-size: 13px !important;
         }
         
-        div[data-testid="stSidebar"] {
-            background-color: #1a1d24;
+        .stTextInput input:focus {
+            border-color: #555 !important;
+            box-shadow: none !important;
+        }
+        
+        /* Top bar spacing */
+        .block-container {
+            padding-top: 2rem !important;
         }
         
         /* Button styling */
@@ -154,6 +245,62 @@ def main():
         
         .stButton>button:hover {
             background-color: #3d4149;
+        }
+        
+        /* Fix barely visible metrics */
+        [data-testid="stMetricValue"] {
+            color: #ffffff !important;
+            font-size: 24px !important;
+            font-weight: 600 !important;
+        }
+        
+        [data-testid="stMetricLabel"] {
+            color: #cccccc !important;
+            font-size: 14px !important;
+        }
+        
+        [data-testid="stMetricDelta"] {
+            color: #aaaaaa !important;
+        }
+        
+        /* Fix tab text visibility */
+        .stTabs [data-baseweb="tab-list"] button {
+            color: #cccccc !important;
+        }
+        
+        .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
+            color: #ffffff !important;
+        }
+        
+        /* Fix text input and text area */
+        .stTextInput input, .stTextArea textarea {
+            color: #ffffff !important;
+            background-color: #1a1d24 !important;
+        }
+        
+        /* Fix multiselect */
+        .stMultiSelect [data-baseweb="select"] {
+            color: #ffffff !important;
+        }
+        
+        /* Expander styling */
+        .streamlit-expanderHeader {
+            color: #ffffff !important;
+        }
+        
+        /* Popover styling for settings menu */
+        [data-testid="stPopover"] {
+            background-color: #1a1d24 !important;
+        }
+        
+        [data-testid="stPopover"] button {
+            font-size: 20px !important;
+            padding: 8px 12px !important;
+        }
+        
+        /* Style the popover content */
+        div[data-baseweb="popover"] {
+            background-color: #1a1d24 !important;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -182,12 +329,29 @@ def show_review_page():
     current_review = pending[0]
     review_id = current_review.get('id', '')
     
-    # Top bar
-    col_title, col_nav = st.columns([3, 1])
+    # Top bar with reviewer name
+    col_title, col_spacer, col_user = st.columns([3, 1, 2])
     with col_title:
-        st.markdown(f'<p class="main-title">Human review - {len(pending)} of {len(pending)} remaining</p>', unsafe_allow_html=True)
-    with col_nav:
-        st.markdown(f'<p style="text-align: right; color: #666; font-size: 12px;">Item {1} of {len(pending)}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="main-title">Human review - {len(pending)} remaining</p>', unsafe_allow_html=True)
+    with col_spacer:
+        st.markdown(f'<p style="text-align: center; color: #666; font-size: 12px; margin-top: 10px;">Item {1} of {len(pending)}</p>', unsafe_allow_html=True)
+    with col_user:
+        # Initialize reviewer name if not set
+        if 'reviewer_name' not in st.session_state:
+            st.session_state.reviewer_name = "anonymous"
+        
+        st.markdown('<p style="color: #888; font-size: 11px; margin-bottom: 2px; margin-top: 5px;">Reviewer</p>', unsafe_allow_html=True)
+        reviewer_name = st.text_input(
+            "Reviewer", 
+            value=st.session_state.reviewer_name,
+            key="reviewer_input",
+            label_visibility="collapsed",
+            placeholder="Enter your name..."
+        )
+        if reviewer_name:
+            st.session_state.reviewer_name = reviewer_name
+    
+    st.markdown("---")
     
     # Layout: Conversation on left, Review form on right
     col1, col2 = st.columns([2.5, 1])
@@ -300,6 +464,11 @@ def show_review_page():
                 "model": current_review.get('model'),
                 "feature": current_review.get('feature'),
                 
+                # Additional metadata for tracking
+                "organization_name": current_review.get('organization_name'),
+                "agency_user": current_review.get('agency_user'),
+                "user_id": current_review.get('user_id'),
+                
                 # Review data
                 "acceptable": st.session_state.score_choice == "acceptable",
                 "score_choice": st.session_state.score_choice,
@@ -342,6 +511,16 @@ def show_results_page():
     # Convert to DataFrame
     df = pd.DataFrame(reviews)
     
+    # Detect duplicate reviews (same item reviewed by multiple people)
+    duplicate_reviews = {}
+    if 'review_id' in df.columns:
+        review_counts = df['review_id'].value_counts()
+        duplicates = review_counts[review_counts > 1]
+        if len(duplicates) > 0:
+            for review_id in duplicates.index:
+                reviewers = df[df['review_id'] == review_id]['reviewer'].tolist()
+                duplicate_reviews[review_id] = reviewers
+    
     # Summary metrics
     col1, col2, col3, col4 = st.columns(4)
     
@@ -362,6 +541,30 @@ def show_results_page():
         # Count unique organizations if available
         orgs_count = df['organization_name'].nunique() if 'organization_name' in df.columns else 0
         st.metric("Organizations", orgs_count)
+    
+    # Show duplicate reviews if any
+    if duplicate_reviews:
+        st.markdown("---")
+        st.markdown("### 🔄 Multiple Reviews (Same Item)")
+        st.info(f"📊 {len(duplicate_reviews)} items have been reviewed by multiple people")
+        
+        with st.expander(f"View {len(duplicate_reviews)} items with multiple reviews"):
+            for review_id, reviewers in duplicate_reviews.items():
+                # Get the item details
+                item_reviews = df[df['review_id'] == review_id]
+                if len(item_reviews) > 0:
+                    first_review = item_reviews.iloc[0]
+                    prompt = first_review.get('prompt', 'Unknown')
+                    prompt_display = prompt[:80] + "..." if len(str(prompt)) > 80 else prompt
+                    
+                    st.markdown(f"**Item:** {prompt_display}")
+                    st.markdown(f"**Reviewed by:** {', '.join(set(reviewers))} ({len(reviewers)} reviews)")
+                    
+                    # Show agreement stats
+                    acceptable_votes = item_reviews['acceptable'].sum() if 'acceptable' in item_reviews.columns else 0
+                    agreement = f"{acceptable_votes}/{len(item_reviews)} found acceptable"
+                    st.caption(f"Agreement: {agreement}")
+                    st.markdown("---")
     
     st.markdown("---")
     st.markdown("### Recent Reviews")
@@ -391,10 +594,14 @@ def show_results_page():
         # Get tags as comma-separated string
         tags = ', '.join(row.get('tags', [])) if row.get('tags') else ''
         
+        # Get reviewer name
+        reviewer = row.get('reviewer', 'anonymous')
+        
         table_data.append({
             'project_title': prompt,
             'timestamp': timestamp,
             'acceptable': acceptable,
+            'reviewer': reviewer,
             'notes': notes,
             'tags': tags
         })
@@ -415,6 +622,10 @@ def show_results_page():
             ),
             "acceptable": st.column_config.TextColumn(
                 "Acceptable",
+                width="small",
+            ),
+            "reviewer": st.column_config.TextColumn(
+                "Reviewer",
                 width="small",
             ),
             "notes": st.column_config.TextColumn(
@@ -626,14 +837,6 @@ def show_analytics_page():
         df['date'] = pd.to_datetime(df['timestamp']).dt.date
         daily_reviews = df.groupby('date').size()
         st.line_chart(daily_reviews)
-
-
-# Reviewer identification
-if 'reviewer_name' not in st.session_state:
-    with st.sidebar:
-        st.markdown("---")
-        reviewer_name = st.text_input("Your Name (optional)", value="anonymous")
-        st.session_state.reviewer_name = reviewer_name
 
 
 if __name__ == '__main__':
