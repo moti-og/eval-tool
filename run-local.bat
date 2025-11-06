@@ -30,6 +30,9 @@ echo Press Ctrl+C to stop
 echo ========================================
 echo.
 
+REM Open browser after a short delay
+start "" cmd /c "timeout /t 3 >nul && start http://localhost:8069"
+
 vercel dev --listen 8069
 
 pause
