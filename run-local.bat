@@ -12,7 +12,7 @@ timeout /t 1 >nul
 echo.
 
 REM Set MongoDB URI with optimized connection settings
-set MONGODB_URI=mongodb+srv://msorkin_db_user:L9nsLcR7ZYIM3iOP@cluster0.rolg174.mongodb.net/llm_reviews?retryWrites=true^&w=majority^&maxPoolSize=1^&serverSelectionTimeoutMS=5000^&connectTimeoutMS=10000
+set MONGODB_URI=mongodb+srv://wordftw_user:Q0UY6fIio575I1vG@cluster0.rolg174.mongodb.net/llm_reviews?retryWrites=true^&w=majority^&appName=Cluster0^&maxPoolSize=1^&serverSelectionTimeoutMS=5000^&connectTimeoutMS=10000
 
 REM Check if vercel is installed
 where vercel >nul 2>nul
